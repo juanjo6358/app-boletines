@@ -10,11 +10,11 @@ export interface Level {
 
 export interface Student {
   id: string;
-  firstName: string;  // Nombre
-  lastName: string;   // Apellidos
+  firstName: string;
+  lastName: string;
   identifier: string;
   email: string | null;
-  phone?: string | null; // Añadir propiedad phone
+  phone?: string | null;
   address?: string | null;
   birthDate?: string | null;
   courseId: string;
@@ -35,21 +35,13 @@ export interface Course {
 
 export interface AcademicYear {
   id: string;
-  name: string;    // Ejemplo: "2023-2024"
+  name: string;
   isActive: boolean;
 }
 
 export interface GroupSubject {
   id: string;
   name: string;
-}
-
-export interface TeacherCourseSubject {
-  id: string;
-  teacherId: string;
-  courseId: string;
-  subjectName: string;
-  subjectType: 'individual' | 'group';
 }
 
 export interface Teacher {
@@ -89,12 +81,19 @@ export interface CourseTemplateSubject {
   isRequired: boolean;
 }
 
-export interface Field {
+export interface TeacherCourseSubject {
   id: string;
-  name: string;
-  type: 'text' | 'number' | 'select' | 'date' | 'signature';
-  options?: string[]; // Para campos select
-  isAdditional?: boolean; // Añadir esta propiedad
+  teacherId: string;
+  courseId: string;
+  subjectName: string;
+  subjectType: 'individual' | 'group';
+}
+
+export interface ReportCardState {
+  id: string;
+  courseId: string;
+  sections: Section[];
+  subjects: CourseTemplateSubject[];
 }
 
 export interface Section {
@@ -104,19 +103,20 @@ export interface Section {
   fields: Field[];
   hasObservations?: boolean;
   data?: {
-    logo?: string;  // Para almacenar la imagen en base64
+    logo?: string;
     centerName?: string;
     location?: string;
     academicYear?: string;
-    content?: string; // Para el contenido del editor de texto enriquecido
+    content?: string;
   };
 }
 
-export interface ReportCardState {
+export interface Field {
   id: string;
-  courseId: string;
-  sections: Section[];
-  subjects: CourseTemplateSubject[];
+  name: string;
+  type: 'text' | 'number' | 'select' | 'date' | 'signature';
+  options?: string[];
+  isAdditional?: boolean;
 }
 
 export interface CriteriaGroup {
@@ -133,20 +133,15 @@ export interface EvaluationCriterion {
   isDefault?: boolean;
 }
 
-export interface GradeData {
-  attendance: string;
-  global: string;
-  criteria: { [fieldId: string]: string };
-  observations?: string;
-}
-
-export interface Grades {
-  [sectionId: string]: GradeData;
-}
-
-export interface AdditionalCriterion {
-  sectionId: string;
-  fields: Field[];
+export interface User {
+  id: string;
+  username: string;
+  password?: string;
+  role: 'admin' | 'teacher';
+  email: string;
+  isActive: boolean;
+  teacherId?: string;
+  permissions?: Permission[];
 }
 
 export type Permission = 
@@ -163,17 +158,4 @@ export type Permission =
   | 'view_teacher_subjects'
   | 'edit_teacher_subjects';
 
-export interface UserPermissions {
-  [key: string]: Permission[];
-}
-
-export interface User {
-  id: string;
-  username: string;
-  password?: string;
-  role: 'admin' | 'teacher';
-  email: string;
-  isActive: boolean;
-  teacherId?: string;
-  permissions?: Permission[];
-} 
+// ... (resto de tipos) 

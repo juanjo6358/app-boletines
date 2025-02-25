@@ -40,3 +40,4 @@ export interface Template {
   schema: Record<string, any>;
   created_at: string;
 } 
+

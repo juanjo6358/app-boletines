@@ -1,11 +1,12 @@
 import { useState, useEffect, Fragment } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { BackButton } from '../BackButton';
-import { getCourses, getStudents, getReportCard, getStudentGrades, saveStudentGrades, getCenterConfig, getEvaluationCriteria, verifyTemplateAssignment } from '../../lib/db';
-import { Course, Student, Section, ReportCardState, Field, EvaluationCriterion } from '../../types';
+import { getCourses, getStudents, getReportCard, getStudentGrades, saveStudentGrades, getCenterConfig, getEvaluationCriteria, verifyTemplateAssignment, getTeacherSubjects } from '../../lib/db';
+import { Course, Student, Section, ReportCardState, Field, EvaluationCriterion } from '../../types/index';
 import { Listbox, Transition } from '@headlessui/react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { RichTextEditor } from '../common/RichTextEditor';
+import { useAuth } from '../../lib/auth';
 
 interface StudentsByLevel {
   [levelId: string]: {
@@ -100,6 +101,9 @@ interface GradeSelectProps {
 }
 
 export function GradesInput() {
+  const { user } = useAuth();
+  const isTeacher = user?.role === 'teacher';
+  const teacherId = user?.teacherId;
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -145,12 +149,47 @@ export function GradesInput() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [coursesData, studentsData] = await Promise.all([
+        setLoading(true);
+        
+        // Cargar cursos y criterios de evaluación
+        const [coursesData, criteriaData] = await Promise.all([
           getCourses(),
-          getStudents()
+          getEvaluationCriteria()
         ]);
+        
         setCourses(coursesData);
-        setStudents(studentsData);
+        setEvaluationCriteria(criteriaData);
+        
+        // Filtrar estudiantes si el usuario es profesor
+        if (isTeacher && teacherId) {
+          // Obtener las asignaturas/cursos que imparte el profesor
+          const teacherSubjects = await getTeacherSubjects(teacherId);
+          console.log('Asignaturas del profesor:', teacherSubjects);
+          
+          // Obtener los IDs de los cursos donde el profesor imparte clases
+          const teacherCourseIds = teacherSubjects.map(ts => ts.courseId);
+          console.log('IDs de cursos del profesor:', teacherCourseIds);
+          
+          if (teacherCourseIds.length > 0) {
+            // Cargar estudiantes de esos cursos
+            const studentsData = await getStudents();
+            
+            // Filtrar los estudiantes que pertenecen a esos cursos
+            const filteredStudents = studentsData.filter(student => 
+              teacherCourseIds.includes(student.courseId)
+            );
+            
+            console.log('Estudiantes filtrados para el profesor:', filteredStudents);
+            setStudents(filteredStudents);
+          } else {
+            console.log('El profesor no tiene cursos asignados');
+            setStudents([]);
+          }
+        } else {
+          // Si es admin, cargar todos los estudiantes
+          const studentsData = await getStudents();
+          setStudents(studentsData);
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -159,7 +198,7 @@ export function GradesInput() {
     };
 
     loadData();
-  }, []);
+  }, [isTeacher, teacherId]);
 
   // Modificar el useEffect y loadReportCardData
   useEffect(() => {
@@ -189,10 +228,10 @@ export function GradesInput() {
             
             // Añadir los criterios adicionales a las secciones correspondientes
             studentGrades.additionalCriteria.forEach((criterion: AdditionalCriterion) => {
-              const sectionIndex = updatedReportCard.sections.findIndex(s => s.id === criterion.sectionId);
+              const sectionIndex = updatedReportCard.sections.findIndex((s: Section) => s.id === criterion.sectionId);
               if (sectionIndex !== -1) {
                 // Filtrar los campos existentes para no duplicar criterios
-                const existingFieldIds = new Set(updatedReportCard.sections[sectionIndex].fields.map(f => f.id));
+                const existingFieldIds = new Set(updatedReportCard.sections[sectionIndex].fields.map((f: Field) => f.id));
                 
                 // Añadir solo los campos que no existen ya
                 criterion.fields.forEach((field: Field) => {
@@ -208,9 +247,9 @@ export function GradesInput() {
             
             // Actualizar el boletín con los criterios adicionales
             setReportCard(updatedReportCard);
-          } else {
+            } else {
             setReportCard(data);
-          }
+            }
           
           // Inicializar las calificaciones
           if (studentGrades && studentGrades.grades) {
@@ -219,7 +258,7 @@ export function GradesInput() {
           } else {
             // Inicializar calificaciones vacías
             const initialGrades: Grades = {};
-            data.sections.forEach(section => {
+            data.sections.forEach((section: Section) => {
               if (section.type === 'grades') {
                 initialGrades[section.id] = {
                   attendance: '',
@@ -332,7 +371,7 @@ export function GradesInput() {
 
     try {
       setSaveStatus('saving');
-      const currentCourse = courses.find(c => c.id === selectedStudent.courseId);
+        const currentCourse = courses.find(c => c.id === selectedStudent.courseId);
       if (!currentCourse) {
         console.error('No se encontró el curso del estudiante');
         setSaveStatus('unsaved');
@@ -340,15 +379,15 @@ export function GradesInput() {
       }
 
       // Obtener los criterios adicionales actuales
-      const additionalCriteria = reportCard.sections.map(section => ({
-        sectionId: section.id,
+        const additionalCriteria = reportCard.sections.map((section: Section) => ({
+          sectionId: section.id,
         fields: section.fields
-          .filter(field => field.isAdditional)
-          .map(field => ({
+          .filter((field: Field) => field.isAdditional)
+          .map((field: Field) => ({
             ...field,
             type: 'select' as const
           }))
-      })).filter(section => section.fields.length > 0);
+        })).filter((section: { sectionId: string; fields: Field[] }) => section.fields.length > 0);
 
       console.log('Criterios adicionales a guardar:', additionalCriteria);
 
@@ -364,20 +403,20 @@ export function GradesInput() {
         additionalCriteria
       });
 
-      await saveStudentGrades({
-        studentId: selectedStudent.id,
-        courseId: currentCourse.id,
+        await saveStudentGrades({
+          studentId: selectedStudent.id,
+          courseId: currentCourse.id,
         templateId: currentCourse.templateId || '', 
-        academicYear: currentCourse.academicYear,
+          academicYear: currentCourse.academicYear,
         grades: gradesToSave,
-        additionalCriteria
-      });
+          additionalCriteria
+        });
 
       // Actualizar el estado local para reflejar que se guardó correctamente
       setGrades(gradesToSave);
       setHasChanges(false);
-      setSaveStatus('saved');
-    } catch (error) {
+        setSaveStatus('saved');
+      } catch (error) {
       console.error('Error guardando:', error);
       setSaveStatus('unsaved');
       alert('Error al guardar los cambios. Por favor, inténtalo de nuevo.');
@@ -460,12 +499,12 @@ export function GradesInput() {
       
       // 2. Actualizar el reportCard - eliminar el campo de la sección
       const updatedReportCard = { ...reportCard };
-      const sectionIndex = updatedReportCard.sections.findIndex(s => s.id === sectionId);
+      const sectionIndex = updatedReportCard.sections.findIndex((s: Section) => s.id === sectionId);
       
       if (sectionIndex !== -1) {
         // Eliminar el campo de la lista de campos
         updatedReportCard.sections[sectionIndex].fields = 
-          updatedReportCard.sections[sectionIndex].fields.filter(f => f.id !== fieldId);
+          updatedReportCard.sections[sectionIndex].fields.filter((f: Field) => f.id !== fieldId);
         
         // 3. Eliminar el criterio de las notas
         if (newGrades[sectionId]?.criteria) {
@@ -520,7 +559,7 @@ export function GradesInput() {
     const updatedReportCard = { ...reportCard };
     
     // Encontrar la sección correcta
-    const sectionIndex = updatedReportCard.sections.findIndex(s => s.id === sectionId);
+    const sectionIndex = updatedReportCard.sections.findIndex((s: Section) => s.id === sectionId);
     if (sectionIndex === -1) return;
     
     // Crear un nuevo criterio
@@ -748,13 +787,13 @@ export function GradesInput() {
 
                 {/* Criterios de evaluación */}
                 <div className="mb-6">
-                  <h4 className="mb-4 text-base font-semibold text-gray-800 border-b pb-2">
+                  <h4 className="pb-2 mb-4 text-base font-semibold text-gray-800 border-b">
                     Criterios de evaluación
                   </h4>
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     {section.fields
-                      .filter(field => field.type === 'select')
-                      .map(field => (
+                      .filter((field: Field) => field.type === 'select')
+                      .map((field: Field) => (
                         <div key={field.id} className="relative">
                           <div className="flex gap-4 items-center">
                             <label className="min-w-[120px] text-sm font-medium text-gray-700">
@@ -763,30 +802,30 @@ export function GradesInput() {
                             <div className="flex-1">
                               <GradeSelect
                                 currentValue={localGrades[section.id]?.criteria[field.id] || ''}
-                                onChange={(value) => handleGradeChange(section.id, 'criteria', field.id, value)}
+                            onChange={(value) => handleGradeChange(section.id, 'criteria', field.id, value)}
                                 evaluationCriteria={evaluationCriteria}
                               />
                             </div>
-                            
+
                             {/* Botón de eliminar solo visible cuando isEditingCriteria es true */}
                             {field.isAdditional && isEditingCriteria && (
-                              <button
+                            <button
                                 type="button"
                                 onClick={() => handleDeleteCriterion(section.id, field.id)}
                                 className="p-2 text-red-600 bg-red-50 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
                                 aria-label="Eliminar criterio"
                               >
                                 <Trash2 className="w-5 h-5" />
-                              </button>
-                            )}
-                          </div>
+                            </button>
+                          )}
                         </div>
+                      </div>
                       ))}
                   </div>
                 </div>
 
                 {/* Campo de observaciones */}
-                {section.fields.filter(field => field.type === 'text').map((field) => (
+                {section.fields.filter((field: Field) => field.type === 'text').map((field: Field) => (
                   <div 
                     key={field.id}
                     className="mt-4"
@@ -907,7 +946,7 @@ export function GradesInput() {
       case 'observations':
         return (
           <div className="p-6 mb-6 bg-white rounded-lg border border-gray-100 shadow-md">
-            <h4 className="mb-4 text-base font-semibold text-gray-800 border-b pb-2">
+            <h4 className="pb-2 mb-4 text-base font-semibold text-gray-800 border-b">
               {section.title}
             </h4>
             <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -1103,7 +1142,7 @@ export function GradesInput() {
 
                 {/* Renderizar las secciones del boletín */}
                 <div className="space-y-6">
-                  {reportCard.sections.map(section => (
+                  {reportCard.sections.map((section: Section) => (
                     <div key={section.id}>
                       {renderSection(section)}
                     </div>

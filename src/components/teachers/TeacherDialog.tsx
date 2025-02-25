@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Dialog } from '@headlessui/react';
 import { Teacher, Instrument, Course } from '../../types';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { Listbox, Transition } from '@headlessui/react';
 
 interface CourseWithLevel extends Omit<Course, 'levelName'> {
   levelName: string;
@@ -11,10 +9,10 @@ interface CourseWithLevel extends Omit<Course, 'levelName'> {
 interface TeacherDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (teacher: Omit<Teacher, 'id'>) => Promise<Teacher>;
+  onSave: (teacher: Omit<Teacher, 'id' | 'instrumentName' | 'courseNames' | 'courseSubjects'>, courseIds: string[]) => void;
   instruments: Instrument[];
   courses: CourseWithLevel[];
-  initialData: Teacher | null;
+  initialData?: Teacher;
 }
 
 interface FormData {
@@ -22,10 +20,10 @@ interface FormData {
   lastName: string;
   identifier: string;
   email: string;
-  instrumentId: string;
-  courseIds: string[];
   username: string;
   password: string;
+  instrumentId: string;
+  courseIds: string[];
 }
 
 export function TeacherDialog({
@@ -41,10 +39,10 @@ export function TeacherDialog({
     lastName: '',
     identifier: '',
     email: '',
-    instrumentId: '',
-    courseIds: [],
     username: '',
     password: '',
+    instrumentId: '',
+    courseIds: [],
   });
 
   useEffect(() => {
@@ -54,10 +52,10 @@ export function TeacherDialog({
         lastName: initialData.lastName,
         identifier: initialData.identifier,
         email: initialData.email,
-        instrumentId: initialData.instrumentId,
-        courseIds: initialData.courseIds,
         username: initialData.username,
-        password: initialData.password || '',
+        password: '',
+        instrumentId: initialData.instrumentId,
+        courseIds: initialData.courseIds || [],
       });
     } else {
       setFormData({
@@ -65,18 +63,32 @@ export function TeacherDialog({
         lastName: '',
         identifier: '',
         email: '',
-        instrumentId: '',
-        courseIds: [],
         username: '',
         password: '',
+        instrumentId: '',
+        courseIds: [],
       });
     }
-  }, [initialData]);
+  }, [initialData, isOpen]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCourseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const courseId = e.target.value;
+    if (e.target.checked) {
+      setFormData(prev => ({ ...prev, courseIds: [...prev.courseIds, courseId] }));
+    } else {
+      setFormData(prev => ({ ...prev, courseIds: prev.courseIds.filter(id => id !== courseId) }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await onSave(formData);
+      await onSave(formData, formData.courseIds);
       onClose();
     } catch (error) {
       console.error('Error saving teacher:', error);
@@ -84,205 +96,176 @@ export function TeacherDialog({
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+    <Dialog open={isOpen} onClose={onClose} className="overflow-y-auto fixed inset-0 z-10">
+      <div className="flex justify-center items-center px-4 min-h-screen">
+        <div className="fixed inset-0 bg-black opacity-30" />
 
-      <div className="flex fixed inset-0 justify-center items-center p-4">
-        <Dialog.Panel className="overflow-hidden p-6 w-full max-w-2xl text-left align-middle bg-white rounded-2xl shadow-xl transition-all transform">
-          <Dialog.Title as="h3" className="mb-4 text-lg font-medium leading-6 text-gray-900">
-            {initialData ? 'Editar Profesor' : 'Nuevo Profesor'}
+        <div className="relative p-6 mx-auto w-full max-w-2xl bg-white rounded-lg">
+          <Dialog.Title className="text-lg font-medium text-gray-900">
+            {initialData ? 'Editar Profesor' : 'Añadir Profesor'}
           </Dialog.Title>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                  Nombre *
-                </label>
-                <input
-                  id="firstName"
-                  type="text"
-                  required
-                  placeholder="Introduce el nombre"
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                  Apellidos *
-                </label>
-                <input
-                  id="lastName"
-                  type="text"
-                  required
-                  placeholder="Introduce los apellidos"
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
-                  Identificador *
-                </label>
-                <input
-                  id="identifier"
-                  type="text"
-                  required
-                  placeholder="Introduce el identificador"
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.identifier}
-                  onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email *
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  placeholder="Introduce el email"
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Instrumento *
-                </label>
-                <Listbox
-                  value={formData.instrumentId}
-                  onChange={(value) => setFormData({ ...formData, instrumentId: value })}
-                >
-                  <div className="relative mt-1">
-                    <Listbox.Button className="relative py-2 pr-10 pl-3 w-full text-left bg-white rounded-md border border-gray-300 shadow-sm cursor-pointer focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                      <span className="block truncate">
-                        {instruments.find(i => i.id === formData.instrumentId)?.name || 'Selecciona un instrumento'}
-                      </span>
-                      <span className="flex absolute inset-y-0 right-0 items-center pr-2 pointer-events-none">
-                        <ChevronsUpDown className="w-4 h-4 text-gray-400" aria-hidden="true" />
-                      </span>
-                    </Listbox.Button>
-                    <Transition
-                      leave="transition ease-in duration-100"
-                      leaveFrom="opacity-100"
-                      leaveTo="opacity-0"
-                    >
-                      <Listbox.Options className="overflow-auto absolute z-10 py-1 mt-1 w-full max-h-60 text-base bg-white rounded-md ring-1 ring-black ring-opacity-5 shadow-lg focus:outline-none">
-                        {instruments.map((instrument) => (
-                          <Listbox.Option
-                            key={instrument.id}
-                            value={instrument.id}
-                            className={({ active }) => `
-                              relative cursor-pointer select-none py-2 pl-10 pr-4
-                              ${active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'}
-                            `}
-                          >
-                            {({ selected }) => (
-                              <>
-                                <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                  {instrument.name}
-                                </span>
-                                {selected && (
-                                  <span className="flex absolute inset-y-0 left-0 items-center pl-3 text-indigo-600">
-                                    <Check className="w-5 h-5" aria-hidden="true" />
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </Listbox.Option>
-                        ))}
-                      </Listbox.Options>
-                    </Transition>
-                  </div>
-                </Listbox>
-              </div>
-
-              <div>
-                <label className="block mb-1 text-sm font-medium text-gray-700">
-                  Cursos que imparte
-                </label>
-                <div className="overflow-y-auto space-y-2 max-h-48">
-                  {courses.map((course) => (
-                    <label key={course.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.courseIds.includes(course.id)}
-                        onChange={(e) => {
-                          const newCourseIds = e.target.checked
-                            ? [...formData.courseIds, course.id]
-                            : formData.courseIds.filter(id => id !== course.id);
-                          setFormData({ ...formData, courseIds: newCourseIds });
-                        }}
-                        className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                      />
-                      <div className="ml-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {course.name} - {course.levelName}
-                        </span>
-                      </div>
-                    </label>
-                  ))}
+          <form onSubmit={handleSubmit}>
+            <div className="mt-4 space-y-4">
+              {/* Fila 1: Nombre y Apellidos */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                    Apellidos
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  />
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                  Usuario *
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  required
-                  placeholder="Nombre de usuario"
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                />
+              {/* Fila 2: DNI/NIE y Email */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+                    DNI/NIE
+                  </label>
+                  <input
+                    type="text"
+                    id="identifier"
+                    name="identifier"
+                    value={formData.identifier}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  {initialData ? 'Contraseña (dejar vacío para mantener)' : 'Contraseña *'}
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  required={!initialData}
-                  placeholder={initialData ? '••••••••' : 'Introduce la contraseña'}
-                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                />
+              {/* Fila 3: Nombre de usuario y Contraseña */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                    Nombre de usuario
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                    Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required={!initialData}
+                    placeholder={initialData ? "Dejar en blanco para mantener la actual" : ""}
+                  />
+                </div>
+              </div>
+
+              {/* Fila 4: Instrumento y Cursos asignados */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="instrumentId" className="block text-sm font-medium text-gray-700">
+                    Instrumento
+                  </label>
+                  <select
+                    id="instrumentId"
+                    name="instrumentId"
+                    value={formData.instrumentId}
+                    onChange={handleChange}
+                    className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Selecciona un instrumento</option>
+                    {instruments.map(instrument => (
+                      <option key={instrument.id} value={instrument.id}>
+                        {instrument.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium text-gray-700">
+                    Cursos asignados
+                  </label>
+                  <div className="overflow-y-auto p-2 max-h-32 rounded-md border border-gray-300">
+                    {courses.map(course => (
+                      <div key={course.id} className="flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          id={`course-${course.id}`}
+                          value={course.id}
+                          checked={formData.courseIds.includes(course.id)}
+                          onChange={handleCourseChange}
+                          className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                        />
+                        <label htmlFor={`course-${course.id}`} className="block ml-2 text-sm text-gray-900">
+                          {course.name} - {course.levelName}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end mt-6">
+            <div className="flex justify-end mt-6 space-x-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md border border-transparent shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {initialData ? 'Guardar Cambios' : 'Crear Profesor'}
+                {initialData ? 'Guardar cambios' : 'Crear profesor'}
               </button>
             </div>
           </form>
-        </Dialog.Panel>
+        </div>
       </div>
     </Dialog>
   );

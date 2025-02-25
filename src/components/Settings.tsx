@@ -42,8 +42,9 @@ import { GroupSubjectManager } from './settings/GroupSubjectManager';
 import { CourseTemplateManager } from './settings/CourseTemplateManager';
 import { CenterConfig } from './settings/CenterConfig';
 import { EvaluationCriteriaManager } from './settings/EvaluationCriteriaManager';
+import { UserCredentials } from './settings/UserCredentials';
 
-type SettingsTab = 'academic-year' | 'courses' | 'levels' | 'instruments' | 'group-subjects' | 'course-templates' | 'center-config' | 'evaluation-criteria';
+type SettingsTab = 'academic-year' | 'courses' | 'levels' | 'instruments' | 'group-subjects' | 'course-templates' | 'center-config' | 'evaluation-criteria' | 'users';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('academic-year');
@@ -500,6 +501,12 @@ export function Settings() {
           onReorder={handleReorderEvaluationCriteria}
         />
       )
+    },
+    {
+      id: 'users',
+      name: 'Credenciales de Usuarios',
+      icon: SettingsIcon,
+      component: <UserCredentials />
     }
   ] as const;
 

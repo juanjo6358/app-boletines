@@ -1,9 +1,16 @@
 import { Link } from 'react-router-dom';
 import { Users, GraduationCap, ClipboardList, Settings, School, BookOpen } from 'lucide-react';
-import { useIsAdmin } from '../lib/auth';
+import { useIsAdmin, useHasPermission } from '../lib/auth';
 
 export function Dashboard() {
   const isAdmin = useIsAdmin();
+  
+  // Usar los hooks de permisos para cada funcionalidad
+  const canViewStudents = useHasPermission('view_students');
+  const canViewTeachers = useHasPermission('view_teachers');
+  const canViewCourses = useHasPermission('view_courses');
+  const canViewGrades = useHasPermission('view_grades');
+  const canViewTeacherSubjects = useHasPermission('view_teacher_subjects');
 
   const menuItems = [
     {
@@ -11,36 +18,42 @@ export function Dashboard() {
       href: '/students',
       icon: Users,
       gradient: 'from-blue-600 to-blue-400',
+      show: canViewStudents || isAdmin
     },
     {
       name: 'Profesores',
       href: '/teachers',
       icon: GraduationCap,
       gradient: 'from-purple-600 to-purple-400',
+      show: canViewTeachers || isAdmin
     },
     {
       name: 'Cursos',
       href: '/courses',
       icon: BookOpen,
       gradient: 'from-emerald-600 to-emerald-400',
+      show: canViewCourses || isAdmin
     },
     {
       name: 'Boletines',
       href: '/report-cards',
       icon: ClipboardList,
       gradient: 'from-amber-600 to-amber-400',
+      show: isAdmin // Solo mostrar para administradores
     },
     {
       name: 'Introducción de Notas',
       href: '/grades',
       icon: ClipboardList,
       gradient: 'from-teal-600 to-teal-400',
+      show: canViewGrades || isAdmin
     },
     {
       name: 'Asignaturas del Profesorado',
       href: '/teacher-subjects',
       icon: BookOpen,
       gradient: 'from-pink-600 to-pink-400',
+      show: canViewTeacherSubjects || isAdmin
     },
     {
       name: 'Configuración',
@@ -48,10 +61,12 @@ export function Dashboard() {
       icon: Settings,
       gradient: 'from-gray-600 to-gray-400',
       adminOnly: true,
+      show: isAdmin
     },
   ];
 
-  const filteredItems = isAdmin ? menuItems : menuItems.filter(item => !item.adminOnly);
+  // Filtrar los elementos del menú según los permisos
+  const filteredItems = menuItems.filter(item => item.show);
 
   return (
     <div className="min-h-screen bg-gray-50">
