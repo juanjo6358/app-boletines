@@ -1,0 +1,36 @@
+.draggable-section {
+  transform: var(--transform);
+  transition: var(--transition);
+}
+
+.draggable-section-container {
+  padding: 1rem;
+  background-color: white;
+  border-width: 2px;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.draggable-section-dragging {
+  border-color: rgb(59, 130, 246);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.draggable-section-normal {
+  border-color: rgb(229, 231, 235);
+}
+
+.loading-spinner {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  border-bottom-width: 2px;
+  border-color: rgb(79, 70, 229);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+} 
