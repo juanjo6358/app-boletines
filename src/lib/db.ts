@@ -1,6 +1,13 @@
 export * from './db/index';
 export * from './db/types';
 import { db } from './db/index';
+import { 
+  Student,
+  // ... otros tipos que ya estén importados
+} from '../types';
+
+// O si prefieres importarlo desde types/index.ts:
+// import { Student } from '../types/index';
 
 // Definir los tipos necesarios aquí
 interface GradeData {
@@ -164,3 +171,40 @@ export const saveStudentGrades = async ({
 
 // Exportar también getStudentGrades para que esté disponible
 export { getStudentGrades };
+
+export async function getStudents(): Promise<Student[]> {
+  const result = await db.execute({
+    sql: `
+      SELECT 
+        s.*,
+        i.name as instrument_name,
+        l.name as level_name,
+        c.name as course_name
+      FROM students s
+      LEFT JOIN instruments i ON s.instrument_id = i.id
+      LEFT JOIN courses c ON s.course_id = c.id
+      LEFT JOIN levels l ON c.level_id = l.id
+      ORDER BY s.last_name, s.first_name
+    `,
+    args: []
+  });
+
+  return result.rows.map(row => {
+    console.log('Procesando fila:', row);
+    return {
+      id: row.id as string,
+      firstName: row.first_name as string,
+      lastName: row.last_name as string,
+      identifier: row.identifier as string,
+      email: row.email as string,
+      phone: row.phone as string | null,
+      address: row.address as string | null,
+      birthDate: row.birth_date as string | null,
+      courseId: row.course_id as string,
+      courseName: row.course_name as string,
+      instrumentId: row.instrument_id as string,
+      instrumentName: row.instrument_name as string,
+      levelName: row.level_name as string
+    };
+  });
+}

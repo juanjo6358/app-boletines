@@ -581,10 +581,12 @@ export function UserCredentials() {
                     <button
                       onClick={() => handleEditUser(user)}
                       className="mr-3 text-indigo-600 hover:text-indigo-900"
+                      title="Editar usuario"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
+                      title="Cambiar contraseña"
                       onClick={() => {
                         setUserForPasswordChange({id: user.id, username: user.username});
                         setIsPasswordDialogOpen(true);
@@ -595,9 +597,10 @@ export function UserCredentials() {
                     </button>
                     {user.role === 'teacher' && (
                       <button
+                        title="Gestionar permisos"
                         onClick={() => {
                           setUserForPermissions({
-                            id: user.id, 
+                            id: user.id,
                             username: user.username,
                             permissions: user.permissions || []
                           });
@@ -612,6 +615,7 @@ export function UserCredentials() {
                       onClick={() => handleDeleteUser(user.id)}
                       className="text-red-600 hover:text-red-900"
                       disabled={user.role === 'admin'} // No permitir eliminar administradores
+                      title="Eliminar usuario"
                     >
                       <Trash2 className={`w-4 h-4 ${user.role === 'admin' ? 'opacity-30' : ''}`} />
                     </button>

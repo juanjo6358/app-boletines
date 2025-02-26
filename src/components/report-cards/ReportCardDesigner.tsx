@@ -313,6 +313,7 @@ function DraggableSection({
                     <button
                       onClick={() => handleDeleteCriterion(field.id)}
                       className="p-1 text-red-400 hover:text-red-600"
+                      title="Eliminar criterio"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -334,6 +335,7 @@ function DraggableSection({
                   <button
                     onClick={() => handleDeleteCriterion(field.id)}
                     className="p-1 text-red-400 hover:text-red-600"
+                    title="Eliminar observaciones"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -468,6 +470,7 @@ function DraggableSection({
         <button
           className="p-1 text-red-400 hover:text-red-600"
           onClick={() => onDelete(section.id)}
+          title="Eliminar sección"
         >
           <Trash2 className="w-5 h-5" />
         </button>

@@ -113,6 +113,7 @@ export function CenterConfig() {
                   className="object-contain w-full h-full rounded-lg border"
                 />
                 <button
+                  title="Eliminar logo"
                   onClick={() => {
                     setConfig(prev => ({ ...prev, logo: undefined }));
                     setSaveStatus('unsaved');

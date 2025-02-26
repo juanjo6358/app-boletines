@@ -96,7 +96,11 @@ export function ImportStudentsPreview({
         <div className="relative p-6 w-full max-w-6xl bg-white rounded-lg shadow-xl">
           <Dialog.Title className="flex justify-between items-center mb-4 text-lg font-medium text-gray-900">
             <span>Vista previa de importación ({students.length} alumnos)</span>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <button 
+              onClick={onClose} 
+              className="text-gray-400 hover:text-gray-500"
+              title="Cerrar"
+            >
               <X className="w-5 h-5" />
             </button>
           </Dialog.Title>

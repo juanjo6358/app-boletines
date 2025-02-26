@@ -9,10 +9,10 @@ export function BackButton() {
   return (
     <button
       onClick={() => navigate(-1)}
-      className="p-2 text-gray-600 hover:text-gray-900 rounded-full hover:bg-gray-100"
+      className="p-2 text-gray-600 rounded-full hover:text-gray-900 hover:bg-gray-100"
       aria-label="Volver atrás"
     >
-      <ArrowLeft className="h-6 w-6" />
+      <ArrowLeft className="w-6 h-6" />
     </button>
   );
 }

@@ -150,43 +150,29 @@ export function GradesInput() {
     const loadData = async () => {
       try {
         setLoading(true);
-        
-        // Cargar cursos y criterios de evaluación
+
         const [coursesData, criteriaData] = await Promise.all([
           getCourses(),
           getEvaluationCriteria()
         ]);
-        
+
         setCourses(coursesData);
         setEvaluationCriteria(criteriaData);
-        
-        // Filtrar estudiantes si el usuario es profesor
+
         if (isTeacher && teacherId) {
-          // Obtener las asignaturas/cursos que imparte el profesor
           const teacherSubjects = await getTeacherSubjects(teacherId);
-          console.log('Asignaturas del profesor:', teacherSubjects);
-          
-          // Obtener los IDs de los cursos donde el profesor imparte clases
           const teacherCourseIds = teacherSubjects.map(ts => ts.courseId);
-          console.log('IDs de cursos del profesor:', teacherCourseIds);
-          
+
           if (teacherCourseIds.length > 0) {
-            // Cargar estudiantes de esos cursos
             const studentsData = await getStudents();
-            
-            // Filtrar los estudiantes que pertenecen a esos cursos
-            const filteredStudents = studentsData.filter(student => 
+            const filteredStudents = studentsData.filter(student =>
               teacherCourseIds.includes(student.courseId)
             );
-            
-            console.log('Estudiantes filtrados para el profesor:', filteredStudents);
             setStudents(filteredStudents);
           } else {
-            console.log('El profesor no tiene cursos asignados');
             setStudents([]);
           }
         } else {
-          // Si es admin, cargar todos los estudiantes
           const studentsData = await getStudents();
           setStudents(studentsData);
         }
@@ -199,6 +185,12 @@ export function GradesInput() {
 
     loadData();
   }, [isTeacher, teacherId]);
+
+  useEffect(() => {
+    if (selectedStudent) {
+      console.log('Estudiante seleccionado (con instrumentName):', selectedStudent);
+    }
+  }, [selectedStudent]);
 
   // Modificar el useEffect y loadReportCardData
   useEffect(() => {
@@ -247,9 +239,9 @@ export function GradesInput() {
             
             // Actualizar el boletín con los criterios adicionales
             setReportCard(updatedReportCard);
-            } else {
+          } else {
             setReportCard(data);
-            }
+          }
           
           // Inicializar las calificaciones
           if (studentGrades && studentGrades.grades) {
@@ -371,7 +363,7 @@ export function GradesInput() {
 
     try {
       setSaveStatus('saving');
-        const currentCourse = courses.find(c => c.id === selectedStudent.courseId);
+      const currentCourse = courses.find(c => c.id === selectedStudent.courseId);
       if (!currentCourse) {
         console.error('No se encontró el curso del estudiante');
         setSaveStatus('unsaved');
@@ -379,15 +371,15 @@ export function GradesInput() {
       }
 
       // Obtener los criterios adicionales actuales
-        const additionalCriteria = reportCard.sections.map((section: Section) => ({
-          sectionId: section.id,
+      const additionalCriteria = reportCard.sections.map((section: Section) => ({
+        sectionId: section.id,
         fields: section.fields
           .filter((field: Field) => field.isAdditional)
           .map((field: Field) => ({
             ...field,
             type: 'select' as const
           }))
-        })).filter((section: { sectionId: string; fields: Field[] }) => section.fields.length > 0);
+      })).filter((section: { sectionId: string; fields: Field[] }) => section.fields.length > 0);
 
       console.log('Criterios adicionales a guardar:', additionalCriteria);
 
@@ -403,20 +395,20 @@ export function GradesInput() {
         additionalCriteria
       });
 
-        await saveStudentGrades({
-          studentId: selectedStudent.id,
-          courseId: currentCourse.id,
+      await saveStudentGrades({
+        studentId: selectedStudent.id,
+        courseId: currentCourse.id,
         templateId: currentCourse.templateId || '', 
-          academicYear: currentCourse.academicYear,
+        academicYear: currentCourse.academicYear,
         grades: gradesToSave,
-          additionalCriteria
-        });
+        additionalCriteria
+      });
 
       // Actualizar el estado local para reflejar que se guardó correctamente
       setGrades(gradesToSave);
       setHasChanges(false);
-        setSaveStatus('saved');
-      } catch (error) {
+      setSaveStatus('saved');
+    } catch (error) {
       console.error('Error guardando:', error);
       setSaveStatus('unsaved');
       alert('Error al guardar los cambios. Por favor, inténtalo de nuevo.');
@@ -529,14 +521,14 @@ export function GradesInput() {
           }).filter((ac: AdditionalCriterion) => ac.fields.length > 0);
           
           // 5. Guardar los cambios
-      await saveStudentGrades({
-        studentId: selectedStudent.id,
+          await saveStudentGrades({
+            studentId: selectedStudent.id,
             courseId: course.id,
             templateId: course.templateId || '',
             academicYear: course.academicYear,
-        grades: newGrades,
-        additionalCriteria
-      });
+            grades: newGrades,
+            additionalCriteria
+          });
 
           // 6. Actualizar todos los estados
           setReportCard(updatedReportCard);
@@ -622,6 +614,10 @@ export function GradesInput() {
   const renderSection = (section: Section) => {
     switch (section.type) {
       case 'header':
+        // Logs fuera del JSX
+        console.log("Antes del render - label:", selectedStudent?.instrumentName);
+        console.log("Antes del render - span:", selectedStudent?.instrumentName);
+        
         return (
           <div className="p-6 mb-6 bg-white rounded-lg border border-gray-100 shadow-md">
             {/* Título */}
@@ -707,8 +703,8 @@ export function GradesInput() {
                         Instrumento
                       </label>
                       <div className="p-2 bg-gray-50 rounded border">
-                        <span className="text-gray-800">
-                          {selectedStudent?.instrumentName}
+                        <span className="font-medium text-gray-800">
+                          {selectedStudent?.instrumentName || 'No asignado'}
                         </span>
                       </div>
                     </div>
@@ -727,7 +723,9 @@ export function GradesInput() {
               {/* Título de la asignatura con fondo azul más visible */}
               <div className="px-6 py-4 bg-gradient-to-r from-blue-100 to-blue-50 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-800">
-                  {section.title}
+                  {section.title === 'Instrumento' 
+                    ? selectedStudent?.instrumentName || 'Instrumento'
+                    : section.title}
                 </h2>
               </div>
 
@@ -802,24 +800,24 @@ export function GradesInput() {
                             <div className="flex-1">
                               <GradeSelect
                                 currentValue={localGrades[section.id]?.criteria[field.id] || ''}
-                            onChange={(value) => handleGradeChange(section.id, 'criteria', field.id, value)}
+                                onChange={(value) => handleGradeChange(section.id, 'criteria', field.id, value)}
                                 evaluationCriteria={evaluationCriteria}
                               />
                             </div>
 
                             {/* Botón de eliminar solo visible cuando isEditingCriteria es true */}
                             {field.isAdditional && isEditingCriteria && (
-                            <button
+                              <button
                                 type="button"
                                 onClick={() => handleDeleteCriterion(section.id, field.id)}
                                 className="p-2 text-red-600 bg-red-50 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
                                 aria-label="Eliminar criterio"
                               >
                                 <Trash2 className="w-5 h-5" />
-                            </button>
-                          )}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
                       ))}
                   </div>
                 </div>
@@ -898,16 +896,16 @@ export function GradesInput() {
                     </form>
                   ) : (
                     <div className="flex gap-2">
-                    <button
+                      <button
                         onClick={(e) => {
                           e.preventDefault();
                           openAddCriterionForm(section.id);
                         }}
-                      className="flex items-center px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
-                    >
-                      <Plus className="mr-2 w-4 h-4" />
-                      Añadir criterio adicional
-                    </button>
+                        className="flex items-center px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                      >
+                        <Plus className="mr-2 w-4 h-4" />
+                        Añadir criterio adicional
+                      </button>
                       
                       <button
                         onClick={(e) => {
@@ -1127,6 +1125,7 @@ export function GradesInput() {
                       onClick={() => navigateToStudent('prev')}
                       disabled={!selectedStudent}
                       className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                      title="Estudiante anterior"
                     >
                       <ChevronLeft className="w-6 h-6" />
                     </button>
@@ -1134,6 +1133,7 @@ export function GradesInput() {
                       onClick={() => navigateToStudent('next')}
                       disabled={!selectedStudent}
                       className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                      title="Siguiente estudiante"
                     >
                       <ChevronRight className="w-6 h-6" />
                     </button>
@@ -1192,7 +1192,7 @@ export function GradesInput() {
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-            </svg>
+                      </svg>
                       Guardado
                     </>
                   ) : (
@@ -1202,8 +1202,8 @@ export function GradesInput() {
                       </svg>
                       Guardar cambios
                     </>
-        )}
-      </div>
+                  )}
+                </div>
               </button>
             </div>
           </div>
