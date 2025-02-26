@@ -543,60 +543,77 @@ export function GradesInput() {
     }
   };
 
-  // Modificar la función handleAddCriterion para asegurarnos de que se guarda correctamente
-  const handleAddCriterion = (sectionId: string) => {
-    if (!newCriterionName.trim() || !reportCard) return;
-    
-    // Crear una copia del reportCard actual
-    const updatedReportCard = { ...reportCard };
-    
-    // Encontrar la sección correcta
-    const sectionIndex = updatedReportCard.sections.findIndex((s: Section) => s.id === sectionId);
-    if (sectionIndex === -1) return;
-    
-    // Crear un nuevo criterio
-    const newCriterion: Field = {
-      id: crypto.randomUUID(),
-      name: newCriterionName.trim(),
-      type: 'select',
-      isAdditional: true // Marcar como criterio adicional
-    };
-    
-    // Añadir el criterio a la sección
-    updatedReportCard.sections[sectionIndex].fields.push(newCriterion);
-    
-    // Actualizar el estado
-    setReportCard(updatedReportCard);
-    
-    // Inicializar el valor del criterio en las calificaciones locales
-    const updatedLocalGrades = { ...localGrades };
-    if (!updatedLocalGrades[sectionId]) {
-      updatedLocalGrades[sectionId] = {
-        attendance: '',
-        global: '',
-        criteria: {},
-        observations: ''
+  // Modificar la función handleAddCriterion para guardar automáticamente
+  const handleAddCriterion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent || !reportCard) return;
+
+    try {
+      // Generar un ID único para el nuevo criterio
+      const newFieldId = crypto.randomUUID();
+
+      // Crear el nuevo campo
+      const newField: Field = {
+        id: newFieldId,
+        name: newCriterionName,
+        type: 'select',
+        isAdditional: true
       };
+
+      // Actualizar el estado local
+      const updatedReportCard = { ...reportCard };
+      const sectionIndex = updatedReportCard.sections.findIndex(s => s.id === addingSectionId);
+      
+      if (sectionIndex !== -1) {
+        updatedReportCard.sections[sectionIndex].fields.push(newField);
+        setReportCard(updatedReportCard);
+
+        // Actualizar las calificaciones locales
+        const updatedGrades = {
+          ...localGrades,
+          [addingSectionId as string]: {
+            ...(localGrades[addingSectionId as string] || {
+              attendance: '',
+              global: '',
+              criteria: {},
+              observations: ''
+            }),
+            attendance: localGrades[addingSectionId as string]?.attendance || '',
+            global: localGrades[addingSectionId as string]?.global || '',
+            criteria: {
+              ...(localGrades[addingSectionId as string]?.criteria || {}),
+              [newFieldId]: ''
+            },
+            observations: localGrades[addingSectionId as string]?.observations || ''
+          }
+        };
+
+        // Guardar inmediatamente en Turso
+        await saveStudentGrades({
+          studentId: selectedStudent.id,
+          courseId: selectedStudent.courseId,
+          templateId: reportCard.id,
+          grades: updatedGrades,
+          academicYear: '2023-2024',
+          additionalCriteria: [
+            ...reportCard.sections.map(section => ({
+              sectionId: section.id,
+              fields: section.fields.filter(f => f.isAdditional)
+            }))
+          ]
+        });
+
+        // Actualizar estados locales después del guardado exitoso
+        setLocalGrades(updatedGrades);
+        setGrades(updatedGrades);
+        setSaveStatus('saved');
+        setNewCriterionName('');
+        setAddingSectionId(null);
+      }
+    } catch (error) {
+      console.error('Error al añadir y guardar criterio:', error);
+      // Mostrar algún mensaje de error al usuario
     }
-    
-    // Inicializar el nuevo criterio con valor vacío
-    updatedLocalGrades[sectionId].criteria[newCriterion.id] = '';
-    
-    // Actualizar el estado
-    setLocalGrades(updatedLocalGrades);
-    setHasChanges(true);
-    
-    // Limpiar el campo de entrada
-    setNewCriterionName('');
-    setIsAddingCriterion(false);
-    setAddingSectionId(null);
-    
-    console.log('Criterio añadido:', {
-      sectionId,
-      criterion: newCriterion,
-      updatedReportCard,
-      updatedLocalGrades
-    });
   };
 
   // Modificar el renderizado de los campos de notas
@@ -861,10 +878,7 @@ export function GradesInput() {
                 {/* Botón y formulario para añadir criterio */}
                 <div className="flex gap-2 items-center mt-4">
                   {isAddingCriterionForSection(section.id) ? (
-                    <form onSubmit={(e: React.FormEvent) => {
-                      e.preventDefault(); // Prevenir el comportamiento por defecto
-                      handleAddCriterion(section.id);
-                    }} className="space-y-4">
+                    <form onSubmit={handleAddCriterion} className="space-y-4">
                       <div>
                         <input
                           type="text"
