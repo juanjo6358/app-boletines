@@ -22,6 +22,7 @@ export interface Student {
   instrumentId: string;
   instrumentName?: string;
   levelName?: string;
+  teacherName?: string;     // Nueva propiedad
 }
 
 export interface Course {
@@ -176,4 +177,10 @@ export interface User {
   isActive: boolean;
   teacherId?: string;
   permissions?: Permission[];
+}
+
+export interface CenterConfig {
+  name: string;
+  logo?: string;
+  directorName?: string;   // Nueva propiedad
 } 

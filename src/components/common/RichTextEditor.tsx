@@ -39,7 +39,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose focus:outline-none min-h-[150px] max-w-none p-4',
+        class: 'prose prose-sm sm:prose focus:outline-none min-h-[150px] max-w-none p-4 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4',
         placeholder: placeholder || 'Escribe aquí...',
       },
     },
