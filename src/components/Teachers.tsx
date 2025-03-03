@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { PlusCircle, Search, Pencil, Trash2 } from 'lucide-react';
 import { BackButton } from './BackButton';
 import { TeacherDialog } from './teachers/TeacherDialog';
-import { Teacher, Instrument, Course } from '../types';
+import type { Teacher, Instrument, Course } from '../types';
 import { getTeachers, getCourses, getInstruments, createTeacher, updateTeacher, deleteTeacher, getLevels, assignTeacherSubjects } from '../lib/db/index';
+
+type CourseWithLevel = Course & { levelName: string };
 
 export function Teachers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<CourseWithLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
@@ -30,10 +32,13 @@ export function Teachers() {
       ]);
 
       // Añadir el nombre del nivel a cada curso
-      const coursesWithLevels = coursesData.map(course => ({
-        ...course,
-        levelName: levelsData.find(level => level.id === course.levelId)?.name
-      }));
+      const coursesWithLevels = coursesData.map(course => {
+        const levelName = levelsData.find(level => level.id === course.levelId)?.name || 'Sin nivel';
+        return {
+          ...course,
+          levelName
+        };
+      });
 
       setTeachers(teachersData);
       setInstruments(instrumentsData);
@@ -108,7 +113,7 @@ export function Teachers() {
 
   return (
     <div className="py-6">
-      <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <div className="px-4">
         <div className="mb-6">
           <BackButton />
         </div>
@@ -179,7 +184,7 @@ export function Teachers() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {teachers.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="py-4 text-sm text-center text-gray-500">
@@ -189,13 +194,13 @@ export function Teachers() {
                       ) : (
                         teachers.map((teacher) => (
                           <tr key={teacher.id}>
-                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                            <td className="py-4 pr-3 pl-4 text-sm font-medium text-gray-900 whitespace-nowrap sm:pl-6">
                               {teacher.firstName} {teacher.lastName}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <td className="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">
                               {teacher.email}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <td className="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">
                               {teacher.instrumentName}
                             </td>
                             <td className="px-3 py-4 text-sm text-gray-500">
@@ -208,22 +213,24 @@ export function Teachers() {
                                     {course}
                                   </span>
                                 )) || (
-                                  <span className="text-gray-400 italic">Sin asignaturas</span>
+                                  <span className="italic text-gray-400">Sin asignaturas</span>
                                 )}
                               </div>
                             </td>
-                            <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                            <td className="relative py-4 pr-4 pl-3 text-sm font-medium text-right whitespace-nowrap sm:pr-6">
                               <button
                                 onClick={() => handleEditTeacher(teacher)}
-                                className="text-indigo-600 hover:text-indigo-900 mr-2"
+                                className="mr-2 text-indigo-600 hover:text-indigo-900"
+                                title="Editar profesor"
                               >
-                                <Pencil className="h-5 w-5" />
+                                <Pencil className="w-5 h-5" />
                               </button>
                               <button
                                 onClick={() => handleDeleteTeacher(teacher.id)}
                                 className="text-red-600 hover:text-red-900"
+                                title="Eliminar profesor"
                               >
-                                <Trash2 className="h-5 w-5" />
+                                <Trash2 className="w-5 h-5" />
                               </button>
                             </td>
                           </tr>
@@ -246,7 +253,7 @@ export function Teachers() {
           onSave={handleSaveTeacher}
           instruments={instruments}
           courses={courses}
-          initialData={editingTeacher}
+          initialData={editingTeacher || undefined}
         />
       </div>
     </div>

@@ -10,13 +10,15 @@ interface RichTextEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   showToolbar?: boolean;
+  onEditorReady?: (editor: any) => void;
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   initialValue = '',
   onChange,
   placeholder = '',
-  showToolbar = true
+  showToolbar = true,
+  onEditorReady
 }) => {
   const [isMounted, setIsMounted] = useState(false);
 
@@ -44,6 +46,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       },
     },
   });
+
+  useEffect(() => {
+    if (editor && initialValue !== editor.getHTML()) {
+      editor.commands.setContent(initialValue);
+    }
+  }, [editor, initialValue]);
+
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   if (!isMounted) {
     return <div className="h-[200px] border rounded-md bg-gray-50"></div>;

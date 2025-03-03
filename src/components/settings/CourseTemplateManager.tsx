@@ -243,7 +243,7 @@ export function CourseTemplateManager({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Cabecera */}
       <div className="flex justify-between items-center pb-4 border-b">
         <h2 className="text-xl font-semibold text-gray-900">Plantillas de Curso</h2>

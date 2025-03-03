@@ -4,7 +4,7 @@ import { InstrumentManager } from './settings/InstrumentManager';
 import { LevelManager } from './settings/LevelManager';
 import { CourseManager } from './settings/CourseManager';
 import { AcademicYearManager } from './settings/AcademicYearManager';
-import { Calendar, BookOpen, Music, GraduationCap, FileText, Settings as SettingsIcon } from 'lucide-react';
+import { Calendar, BookOpen, Music, GraduationCap, FileText, Settings as SettingsIcon, Mail } from 'lucide-react';
 import { Instrument, Level, Course, AcademicYear, GroupSubject, CourseTemplate, EvaluationCriterion } from '../types';
 import {
   getInstruments,
@@ -43,8 +43,9 @@ import { CourseTemplateManager } from './settings/CourseTemplateManager';
 import { CenterConfig } from './settings/CenterConfig';
 import { EvaluationCriteriaManager } from './settings/EvaluationCriteriaManager';
 import { UserCredentials } from './settings/UserCredentials';
+import { EmailSettings } from './settings/EmailSettings';
 
-type SettingsTab = 'academic-year' | 'courses' | 'levels' | 'instruments' | 'group-subjects' | 'course-templates' | 'center-config' | 'evaluation-criteria' | 'users';
+type SettingsTab = 'academic-year' | 'courses' | 'levels' | 'instruments' | 'group-subjects' | 'course-templates' | 'center-config' | 'evaluation-criteria' | 'users' | 'email-settings';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('academic-year');
@@ -403,6 +404,12 @@ export function Settings() {
       component: <CenterConfig />
     },
     {
+      id: 'email-settings',
+      name: 'Configuración de Correo',
+      icon: Mail,
+      component: <EmailSettings />
+    },
+    {
       id: 'academic-year',
       name: 'Año Académico',
       icon: Calendar,
@@ -512,7 +519,7 @@ export function Settings() {
 
   return (
     <div className="py-6">
-      <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <div className="px-4">
         <div className="mb-6">
           <BackButton />
         </div>

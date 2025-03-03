@@ -1,14 +1,20 @@
 import { useState, useEffect, Fragment, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Mail, Download } from 'lucide-react';
 import { BackButton } from '../BackButton';
-import { getCourses, getStudents, getReportCard, getStudentGrades, saveStudentGrades, getCenterConfig, getEvaluationCriteria, verifyTemplateAssignment, getTeacherSubjects } from '../../lib/db';
-import { Course, Student, Section, ReportCardState, Field, EvaluationCriterion } from '../../types/index';
+import { getCourses, getStudents, getReportCard, getStudentGrades, saveStudentGrades, getEvaluationCriteria, verifyTemplateAssignment, getTeacherSubjects } from '../../lib/db';
+import { Course, Student, Section, ReportCardState, Field, EvaluationCriterion, EmailTemplate } from '../../types/index';
 import { Listbox, Transition, Portal } from '@headlessui/react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { RichTextEditor } from '../common/RichTextEditor';
 import { useAuth } from '../../lib/auth';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { pdf } from '@react-pdf/renderer';
+import { toast } from 'react-toastify';
+import * as Dialog from '@radix-ui/react-dialog';
+import { 
+  getEmailTemplates,
+  getCenterConfig
+} from '../../lib/db';
 
 interface StudentsByLevel {
   [levelId: string]: {
@@ -50,7 +56,7 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
 }
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm }: ConfirmationModalProps) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm }) => {
   if (!isOpen) return null;
 
   return (
@@ -97,6 +103,484 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm }: ConfirmationModalProp
         </div>
       </div>
     </div>
+  );
+};
+
+// Extender la interfaz Student para incluir parentEmail
+interface StudentWithParent extends Student {
+  parentEmail?: string;
+}
+
+// Interfaz para el modal de correo electrónico
+interface EmailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  courses: Course[];
+  selectedStudent: Student | null;
+  onSend: (
+    recipients: string[], 
+    subject: string, 
+    body: string, 
+    attachments?: { filename: string; content: string; contentType: string }[]
+  ) => Promise<boolean>;
+  handleDownloadPDF: (student?: Student) => Promise<string>;
+  students: Student[];
+  grades: { [studentId: string]: GradeData };
+  addToast: (message: string, type: 'success' | 'error' | 'info') => void;
+}
+
+// Componente Modal de Correo Electrónico
+const EmailModal = ({ 
+  isOpen, 
+  onClose, 
+  courses, 
+  selectedStudent, 
+  onSend, 
+  handleDownloadPDF, 
+  students,
+  addToast 
+}: EmailModalProps) => {
+  const [recipients, setRecipients] = useState<string>('');
+  const [subject, setSubject] = useState<string>('');
+  const [body, setBody] = useState<string>('');
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [isSending, setIsSending] = useState<boolean>(false);
+  const [sendMode, setSendMode] = useState<'individual' | 'course'>('individual');
+  const [pdfPreview, setPdfPreview] = useState<string>('');
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      loadData();
+    }
+  }, [isOpen, selectedStudent]);
+
+  // Función auxiliar para reemplazar variables una sola vez
+
+  const loadData = async () => {
+    try {
+      setIsSending(true);
+      const emailTemplates = await getEmailTemplates();
+      setTemplates(emailTemplates);
+
+      // Si hay un estudiante seleccionado, prellenar los campos
+      if (selectedStudent) {
+        // Buscar el curso del estudiante para mostrar el nivel
+        const studentCourse = courses.find(c => c.id === selectedStudent.courseId);
+        let courseInfo = studentCourse ? studentCourse.name : 'Curso desconocido';
+        
+        // Añadir el nivel si está disponible
+        if (studentCourse && studentCourse.levelId) {
+          const levelName = studentCourse.levelName || 'Nivel desconocido';
+          courseInfo = `${levelName} - ${courseInfo}`;
+        }
+        
+        // Recopilar todos los correos disponibles
+        const emailAddresses: string[] = [];
+        
+        // Añadir correo del alumno si existe
+        if ((selectedStudent as StudentWithParent).email) {
+          emailAddresses.push((selectedStudent as StudentWithParent).email!);
+        }
+        
+        // Añadir correo de los padres si existe
+        if ((selectedStudent as StudentWithParent).parentEmail) {
+          emailAddresses.push((selectedStudent as StudentWithParent).parentEmail!);
+        }
+        
+        // Establecer los destinatarios
+        setRecipients(emailAddresses.join(', '));
+        setSelectedCourse(selectedStudent.courseId);
+        
+        // Prellenar asunto con información del estudiante
+        setSubject(`Boletín de notas de ${selectedStudent.firstName} ${selectedStudent.lastName}`);
+        
+        // Prellenar cuerpo con información básica
+        const defaultBody = `
+          <p>Estimados padres/tutores de ${selectedStudent.firstName} ${selectedStudent.lastName},</p>
+          <p>Adjunto encontrarán el boletín de notas correspondiente a ${courseInfo}.</p>
+          <p>Para cualquier consulta, no duden en contactarnos.</p>
+          <p>Atentamente,</p>
+          <p>El equipo docente</p>
+        `;
+        
+        setBody(defaultBody);
+
+        if (sendMode === 'individual') {
+          // Generar vista previa del PDF solo en modo individual
+          const pdfBase64 = await handleDownloadPDF();
+          setPdfPreview(`data:application/pdf;base64,${pdfBase64}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+      toast.error('Error al cargar las plantillas de correo');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSend = async () => {
+    try {
+      setIsSending(true);
+  
+      // Obtener la plantilla seleccionada si existe
+      let templateSubject = subject;
+      let templateBody = body;
+  
+      if (selectedTemplate) {
+        const template = templates.find(t => t.id === selectedTemplate);
+        if (template) {
+          templateSubject = template.subject;
+          templateBody = template.body;
+        }
+      }
+  
+      if (sendMode === 'individual') {
+        const pdfBase64 = await handleDownloadPDF(selectedStudent || undefined);
+        if (!pdfBase64) {
+          throw new Error('No se pudo generar el PDF');
+        }
+  
+        const attachment = {
+          filename: `boletin_${selectedStudent?.firstName}_${selectedStudent?.lastName}.pdf`,
+          content: pdfBase64,
+          contentType: 'application/pdf',
+          encoding: 'base64'
+        };
+  
+        const success = await onSend(
+          recipients.split(',').map(email => email.trim()),
+          subject,
+          body,
+          [attachment]
+        );
+  
+        if (success) {
+          onClose();
+          addToast('Proceso completado: 1 correo enviado correctamente', 'success');
+        }
+      } else {
+        // Envío por curso
+        const studentsInCourse = students.filter(s => s.courseId === selectedCourse) as StudentWithParent[];
+        let successCount = 0;
+        let errorCount = 0;
+  
+        // Obtener la configuración del centro
+        let centerName = 'Centro de Música';
+        try {
+          const config = await getCenterConfig();
+          if (config) {
+            centerName = config.name;
+          }
+        } catch (err) {
+          console.error('Error al obtener la configuración del centro:', err);
+        }
+  
+        // Procesar los correos en segundo plano
+        onClose(); // Cerrar el modal inmediatamente
+  
+        // Procesar estudiantes secuencialmente para evitar problemas de memoria
+        for (const student of studentsInCourse) {
+          try {
+            const studentEmails = [student.email, student.parentEmail].filter(Boolean) as string[];
+            if (studentEmails.length === 0) {
+              errorCount++;
+              continue;
+            }
+  
+            // Obtener el curso del estudiante
+            const studentCourse = courses.find(c => c.id === student.courseId);
+            let courseInfo = studentCourse ? studentCourse.name : 'Curso desconocido';
+            
+            // Añadir el nivel si está disponible
+            if (studentCourse && studentCourse.levelName) {
+              courseInfo = `${studentCourse.levelName} - ${courseInfo}`;
+            }
+  
+            // Personalizar el asunto y cuerpo para cada estudiante
+            const replacements = {
+              '[NOMBRE_ALUMNO]': `${student.firstName} ${student.lastName}`,
+              '[CURSO]': courseInfo,
+              '[CENTRO]': centerName,
+              '[FECHA]': new Date().toLocaleDateString('es-ES', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })
+            };
+  
+            // Procesar el asunto y cuerpo usando los reemplazos y la plantilla
+            let personalizedSubject = templateSubject;
+            let personalizedBody = templateBody;
+  
+            // Reemplazar todas las variables en el asunto y cuerpo
+            Object.entries(replacements).forEach(([key, value]) => {
+              const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+              personalizedSubject = personalizedSubject.replace(regex, value);
+              personalizedBody = personalizedBody.replace(regex, value);
+            });
+  
+            // Generar PDF específico para este estudiante
+            console.log(`Generando PDF para ${student.firstName} ${student.lastName}...`);
+            const pdfBase64 = await handleDownloadPDF(student);
+            
+            if (!pdfBase64) {
+              throw new Error(`No se pudo generar el PDF para ${student.firstName} ${student.lastName}`);
+            }
+  
+            // Verificar el PDF antes de enviarlo
+            if (!pdfBase64.startsWith('JVBERi0')) {
+              throw new Error(`PDF inválido generado para ${student.firstName} ${student.lastName}`);
+            }
+  
+            // Usar la misma estructura de attachment que en el envío individual
+            const attachment = {
+              filename: `boletin_${student.firstName}_${student.lastName}.pdf`,
+              content: pdfBase64,
+              contentType: 'application/pdf',
+              encoding: 'base64'
+            };
+  
+            const success = await onSend(
+              studentEmails,
+              personalizedSubject,
+              personalizedBody,
+              [attachment]
+            );
+  
+            if (success) {
+              successCount++;
+            } else {
+              throw new Error('El envío del correo falló');
+            }
+  
+            // Pequeña pausa entre envíos para evitar sobrecarga
+            await new Promise(resolve => setTimeout(resolve, 500));
+  
+          } catch (err) {
+            const error = err as Error;
+            console.error(`Error al procesar el envío para ${student.firstName} ${student.lastName}:`, error);
+            errorCount++;
+          }
+        }
+  
+        // Mostrar solo el mensaje final
+        if (successCount > 0) {
+          if (errorCount > 0) {
+            addToast(`Proceso completado: ${successCount} correos enviados correctamente, ${errorCount} fallidos`, 'info');
+          } else {
+            addToast(`Proceso completado: ${successCount} correos enviados correctamente`, 'success');
+          }
+        } else if (errorCount > 0) {
+          addToast(`Error: Fallaron todos los envíos (${errorCount})`, 'error');
+        }
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error al enviar el correo:', error);
+      addToast('Error al enviar el correo', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleRecipientsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setRecipients(e.target.value);
+  };
+
+  return (
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/30" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <Dialog.Title className="mb-4 text-lg font-medium text-gray-900">
+            Enviar boletín por correo electrónico
+          </Dialog.Title>
+
+          <div className="mb-4">
+            <label className="block mb-2 text-sm font-medium text-gray-700">
+              Modo de envío
+            </label>
+            <div className="flex gap-4">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  className="text-indigo-600 form-radio"
+                  name="sendMode"
+                  value="individual"
+                  checked={sendMode === 'individual'}
+                  onChange={(e) => setSendMode(e.target.value as 'individual' | 'course')}
+                />
+                <span className="ml-2">Envío individual</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  className="text-indigo-600 form-radio"
+                  name="sendMode"
+                  value="course"
+                  checked={sendMode === 'course'}
+                  onChange={(e) => setSendMode(e.target.value as 'individual' | 'course')}
+                />
+                <span className="ml-2">Envío por curso</span>
+              </label>
+            </div>
+          </div>
+          
+          <div className={`grid ${sendMode === 'individual' ? 'grid-cols-2' : 'grid-cols-1'} gap-6`}>
+            <div className="space-y-4">
+              {sendMode === 'course' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Curso
+                  </label>
+                  <div className="mt-1">
+                    <CustomSelect
+                      value={selectedCourse}
+                      onChange={(value) => setSelectedCourse(value)}
+                      options={courses.map(course => ({
+                        id: course.id,
+                        name: `${course.name}${course.levelName ? ` - ${course.levelName}` : ''}`
+                      }))}
+                      placeholder="Seleccionar curso"
+                    />
+                  </div>
+                  {selectedCourse && (
+                    <p className="mt-1 text-sm text-gray-500">
+                      {`${students.filter(s => s.courseId === selectedCourse).length} alumnos en este curso`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {sendMode === 'individual' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Destinatarios
+                  </label>
+                  <div className="mt-1">
+                    <textarea
+                      value={recipients}
+                      onChange={handleRecipientsChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      rows={2}
+                      placeholder="ejemplo@correo.com, otro@correo.com"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      {recipients ? 
+                        `Correos detectados: ${recipients.split(',').length}` : 
+                        'No se han detectado correos electrónicos para este alumno'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Plantilla
+                </label>
+                <div className="mt-1">
+                  <CustomSelect
+                    value={selectedTemplate}
+                    onChange={(value) => {
+                      setSelectedTemplate(value);
+                      const template = templates.find(t => t.id === value);
+                      if (template) {
+                        setSubject(template.subject);
+                        setBody(template.body);
+                      }
+                    }}
+                    options={templates.map(template => ({
+                      id: template.id,
+                      name: template.name
+                    }))}
+                    placeholder="Seleccionar plantilla"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Asunto
+                </label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="block mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="Asunto del correo"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Cuerpo del mensaje
+                </label>
+                <RichTextEditor
+                  initialValue={body}
+                  onChange={setBody}
+                  placeholder="Escribe el contenido del correo..."
+                  showToolbar={true}
+                />
+              </div>
+            </div>
+
+            {sendMode === 'individual' && (
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-700">
+                  Vista previa del PDF adjunto
+                </label>
+                <div className="overflow-hidden rounded-lg border border-gray-300" style={{ height: '600px' }}>
+                  {pdfPreview ? (
+                    <iframe
+                      src={pdfPreview}
+                      className="w-full h-full"
+                      title="Vista previa del PDF"
+                    />
+                  ) : (
+                    <div className="flex justify-center items-center h-full bg-gray-50">
+                      <p className="text-gray-500">Cargando vista previa...</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end mt-6 space-x-3">
+            <div className="flex-grow">
+              {isSending && (
+                <span className="text-sm text-gray-500">
+                  Enviando correo, por favor espere...
+                </span>
+              )}
+            </div>
+            <div>
+              <button
+                type="button"
+                className={`inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm ${
+                  isSending ? 'opacity-75 cursor-not-allowed' : ''}`}
+                onClick={handleSend}
+                disabled={isSending || (sendMode === 'course' && !selectedCourse)}
+              >
+                {isSending ? 'Enviando...' : sendMode === 'course' ? 'Enviar a todo el curso' : 'Enviar'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex justify-center px-4 py-2 text-base font-medium text-gray-700 bg-white rounded-md border border-gray-300 shadow-sm hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                onClick={onClose}
+                disabled={isSending}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 };
 
@@ -384,7 +868,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#4b5563',
     textAlign: 'center',
-  }
+  },
+  section: {
+    marginBottom: 20,
+  },
+  field: {
+    marginBottom: 10,
+  },
+  fieldName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1e40af',
+  },
+  fieldValue: {
+    fontSize: 12,
+    color: '#1f2937',
+    flex: 1,
+  },
 });
 
 // Texto enriquecido -> texto plano
@@ -445,14 +945,23 @@ const processRichText = (html: string | undefined): React.ReactNode => {
 // Nota numérica a texto
 const getGradeText = (grade: string | undefined): string => {
   if (!grade) return '';
-  const gradeMap: { [key: string]: string } = {
-    '1': 'SUSPENSO',
-    '2': 'APROBADO',
-    '3': 'BIEN',
-    '4': 'NOTABLE',
-    '5': 'SOBRESALIENTE',
-  };
-  return gradeMap[grade] || grade;
+  // Si es una nota numérica, la devolvemos tal cual
+  if (!isNaN(Number(grade))) return grade;
+  // Para las notas de texto, buscamos su equivalente numérico
+  switch (grade.toUpperCase()) {
+    case 'SOBRESALIENTE':
+      return '9';
+    case 'NOTABLE':
+      return '7';
+    case 'BIEN':
+      return '6';
+    case 'SUFICIENTE':
+      return '5';
+    case 'INSUFICIENTE':
+      return '4';
+    default:
+      return grade;
+  }
 };
 
 const Header = ({ centerConfig, student, courses, currentDate }: HeaderProps) => (
@@ -532,6 +1041,17 @@ const GradeSection = ({ section, grades, evaluationCriteria, courses, selectedSt
     return criterion?.label || '';
   };
 
+  // Función para determinar el estilo de la nota global
+  const getGlobalGradeStyle = (grade: string) => {
+    const numericGrade = parseFloat(grade);
+    if (isNaN(numericGrade)) return styles.gradeValueGlobal;
+
+    return {
+      ...styles.gradeValueGlobal,
+      color: numericGrade < 5 ? '#dc2626' : '#1e40af' // rojo para < 5, azul para >= 5
+    };
+  };
+
   return (
     <View wrap={false} style={styles.sectionContainer}>
       <Text style={styles.sectionTitle}>{section.title || ' '}</Text>
@@ -553,7 +1073,7 @@ const GradeSection = ({ section, grades, evaluationCriteria, courses, selectedSt
             <Text style={styles.gradeLabelGlobal}>CALIFICACIÓN</Text>
             <Text style={styles.gradeLabelGlobal}>GLOBAL</Text>
           </View>
-          <Text style={styles.gradeValueGlobal}>
+          <Text style={getGlobalGradeStyle(gradeData.global)}>
             {getGradeText(gradeData.global)}
           </Text>
         </View>
@@ -657,6 +1177,129 @@ const GradesPDF = ({
   );
 };
 
+// Añadir el componente Toast personalizado
+interface ToastProps {
+  message: string;
+  type: 'success' | 'error' | 'info';
+  onClose: () => void;
+}
+
+const Toast = ({ message, type, onClose }: ToastProps) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const getBackgroundColor = () => {
+    switch (type) {
+      case 'success': return 'bg-green-50 border-green-200';
+      case 'error': return 'bg-red-50 border-red-200';
+      case 'info': return 'bg-blue-50 border-blue-200';
+    }
+  };
+
+  const getTextColor = () => {
+    switch (type) {
+      case 'success': return 'text-green-800';
+      case 'error': return 'text-red-800';
+      case 'info': return 'text-blue-800';
+    }
+  };
+
+  return (
+    <div className={`flex fixed top-4 right-4 z-50 items-center p-4 rounded-lg border shadow-lg ${getBackgroundColor()} animate-slide-in`}>
+      <p className={`mr-3 text-sm font-medium ${getTextColor()}`}>{message}</p>
+      <button
+        onClick={onClose}
+        className={`p-1 rounded-full hover:bg-white/20 ${getTextColor()}`}
+        title="Cerrar notificación"
+        aria-label="Cerrar notificación"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
+
+// Añadir el estado para las notificaciones
+interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
+// Añadir el componente CustomSelect
+const CustomSelect = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { id: string; name: string }[];
+  placeholder: string;
+}) => {
+  return (
+    <Listbox value={value} onChange={onChange}>
+      {({ open }) => (
+        <div className="relative">
+          <Listbox.Button className="relative py-2 pr-10 pl-3 w-full text-left bg-white rounded-md border border-gray-300 cursor-default focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <span className="block truncate">
+              {value ? options.find(opt => opt.id === value)?.name || placeholder : placeholder}
+            </span>
+            <span className="flex absolute inset-y-0 right-0 items-center pr-2 pointer-events-none">
+              <ChevronsUpDown className="w-5 h-5 text-gray-400" aria-hidden="true" />
+            </span>
+          </Listbox.Button>
+
+          <Transition
+            show={open}
+            as={Fragment}
+            leave="transition ease-in duration-100"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <Listbox.Options className="overflow-auto absolute z-10 py-1 mt-1 w-full max-h-60 text-base bg-white rounded-md ring-1 ring-black ring-opacity-5 shadow-lg focus:outline-none sm:text-sm">
+              {options.map((option) => (
+                <Listbox.Option
+                  key={option.id}
+                  className={({ active }) =>
+                    `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                      active ? 'bg-indigo-50 text-indigo-900' : 'text-gray-900'
+                    }`
+                  }
+                  value={option.id}
+                >
+                  {({ selected, active }) => (
+                    <>
+                      <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                        {option.name}
+                      </span>
+                      {selected ? (
+                        <span
+                          className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                            active ? 'text-indigo-600' : 'text-indigo-600'
+                          }`}
+                        >
+                          <Check className="w-5 h-5" aria-hidden="true" />
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </Listbox.Option>
+              ))}
+            </Listbox.Options>
+          </Transition>
+        </div>
+      )}
+    </Listbox>
+  );
+};
+
 export function GradesInput() {
   const { user } = useAuth();
   const isTeacher = user?.role === 'teacher';
@@ -685,6 +1328,19 @@ export function GradesInput() {
   const [] = useState<SignatureData>({});
   const [] = useState(false);
   const [] = useState<'draw' | 'upload'>('draw');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Función para añadir una notificación
+  const addToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = crypto.randomUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  // Función para eliminar una notificación
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
   // Organizar estudiantes por nivel y curso
   const studentsByLevel = students.reduce((acc: StudentsByLevel, student) => {
@@ -1646,44 +2302,102 @@ export function GradesInput() {
     );
   };
 
-  const handleDownloadPDF = async () => {
-    if (!selectedStudent || !centerConfig || !reportCard) return;
-
+  // Modificar la función handleDownloadPDF para manejar correctamente los valores nulos
+  const handleDownloadPDF = async (targetStudent?: Student): Promise<string> => {
     try {
-      const blob = await pdf(
+      const studentToUse = targetStudent || selectedStudent;
+      if (!studentToUse || !reportCard) return '';
+  
+      // Obtener las calificaciones específicas del estudiante
+      let studentGrades;
+      try {
+        const gradesData = await getStudentGrades(studentToUse.id, studentToUse.courseId);
+        studentGrades = gradesData?.grades || {};
+      } catch (error) {
+        console.error(`Error al obtener calificaciones para ${studentToUse.firstName}:`, error);
+        studentGrades = {};
+      }
+  
+      const element = (
+        <GradesPDF
+          student={studentToUse}
+          grades={studentGrades}
+          courses={courses}
+          centerConfig={centerConfig || { name: 'Centro de Música' }}
+          reportCard={reportCard}
+          evaluationCriteria={evaluationCriteria}
+        />
+      );
+  
+      const blob = await pdf(element).toBlob();
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binaryString = '';
+      uint8Array.forEach((byte) => {
+        binaryString += String.fromCharCode(byte);
+      });
+      const base64String = btoa(binaryString);
+  
+      // Verificación del PDF
+      if (!base64String.startsWith('JVBERi0')) {
+        console.error('PDF inválido generado para:', studentToUse.firstName);
+        throw new Error('El PDF generado no es válido');
+      }
+  
+      // Log para debugging
+      console.log(`PDF generado correctamente para ${studentToUse.firstName} ${studentToUse.lastName}`);
+      console.log('PDF length:', base64String.length);
+      console.log('PDF header:', base64String.substring(0, 20));
+  
+      return base64String;
+    } catch (error) {
+      console.error('Error al generar el PDF:', error);
+      toast.error(`Error al generar el PDF para ${targetStudent?.firstName || 'el estudiante'}`);
+      return '';
+    }
+  };
+
+  // Crear una función separada para guardar el PDF en disco
+  const savePDFToDisk = async () => {
+    try {
+      if (!selectedStudent || !reportCard) {
+        toast.error('No hay datos suficientes para generar el PDF');
+        return;
+      }
+
+      // Crear el contenido del PDF usando react-pdf-renderer
+      const element = (
         <GradesPDF
           student={selectedStudent}
           grades={grades}
           courses={courses}
-          centerConfig={centerConfig}
+          centerConfig={centerConfig || { name: 'Centro de Música' }}
           reportCard={reportCard}
           evaluationCriteria={evaluationCriteria}
         />
-      ).toBlob();
+      );
 
-      const suggestedName = `boletin_${selectedStudent.lastName || ''}_${selectedStudent.firstName || ''}_${new Date().toISOString().split('T')[0]}.pdf`;
-
-      try {
-        // Abrir el diálogo de guardado
-        const fileHandle = await (window as any).showSaveFilePicker({
-          suggestedName,
-          types: [{
-            description: 'Archivo PDF',
-            accept: { 'application/pdf': ['.pdf'] },
-          }],
-        });
-
-        // Crear un WriteableStream y escribir el blob
-        const writableStream = await fileHandle.createWritable();
-        await writableStream.write(blob);
-        await writableStream.close();
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name !== 'AbortError') {
-          console.error('Error al guardar el archivo:', err);
-        }
-      }
+      // Renderizar a PDF y obtener como blob
+      const blob = await pdf(element).toBlob();
+      
+      // Crear URL temporal
+      const url = URL.createObjectURL(blob);
+      
+      // Crear enlace y simular clic
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `boletin_${selectedStudent.firstName}_${selectedStudent.lastName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpiar
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('PDF guardado correctamente');
     } catch (error) {
-      console.error('Error al generar el PDF:', error);
+      console.error('Error al guardar el PDF:', error);
+      toast.error('Error al guardar el PDF');
     }
   };
 
@@ -1702,6 +2416,83 @@ export function GradesInput() {
     }));
   };
 
+  // Añadir esta interfaz después de las interfaces existentes y antes de los componentes
+  // Esta interfaz es necesaria para mantener la consistencia en la estructura de datos
+  // de las calificaciones de los estudiantes y posibles usos futuros en la aplicación
+  // @ts-expect-error - Esta interfaz es necesaria para la estructura del proyecto
+  interface StudentGradeData {
+    attendance: string;
+    global: string;
+    criteria: { [key: string]: string };
+    observations?: string;
+  }
+
+  // Eliminar completamente la declaración global y usar directamente window.electron con @ts-ignore
+
+  const handleSendEmail = async (
+    recipients: string[], 
+    subject: string, 
+    body: string,
+    attachments?: { filename: string; content: string; contentType: string }[]
+  ): Promise<boolean> => {
+    try {
+      // Verificar si estamos en Electron
+      // @ts-ignore - window.electron está definido en el entorno Electron
+      const isElectron = typeof window !== 'undefined' && !!window.electron;
+      
+      if (isElectron) {
+        console.log('Enviando correo a través de IPC en Electron');
+        // @ts-ignore - window.electron está definido en el entorno Electron
+        const result = await window.electron.sendEmail({
+          to: recipients,
+          subject,
+          html: body,
+          attachments: attachments || []
+        });
+        
+        if (result.success) {
+          addToast('Correo enviado correctamente', 'success');
+          return true;
+        } else {
+          addToast(`Error al enviar el correo: ${result.error}`, 'error');
+          return false;
+        }
+      } else {
+        console.log('Enviando correo a través del servidor Express');
+        // Obtener la URL de la API desde las variables de entorno expuestas
+        // @ts-ignore - window.env está definido en el entorno Electron
+        const apiUrl = window.env?.VITE_API_URL || 'http://localhost:3001';
+        console.log(`Usando API URL: ${apiUrl}`);
+        
+        const response = await fetch(`${apiUrl}/api/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipients,
+            subject,
+            html: body,
+            attachments: attachments || []
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          addToast(`Error al enviar el correo: ${errorData.error || 'Error desconocido'}`, 'error');
+          return false;
+        }
+        
+        addToast('Correo enviado correctamente', 'success');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error al enviar el correo:', error);
+      addToast(`Error al enviar el correo: ${error instanceof Error ? error.message : 'Error desconocido'}`, 'error');
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex fixed inset-0 justify-center items-center bg-gray-500 bg-opacity-75">
@@ -1715,17 +2506,40 @@ export function GradesInput() {
 
   return (
     <div className="flex flex-col h-screen">
+      {/* Notificaciones */}
+      <div className="fixed top-0 right-0 z-50 p-4 space-y-4">
+        {toasts.map(toast => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
+      </div>
+
       {/* Barra superior */}
       <div className="flex justify-between items-center p-4 bg-white border-b">
-        <BackButton />
         <h1 className="text-xl font-bold">Boletín de Notas</h1>
         {isAdmin && selectedStudent && reportCard && grades && (
-          <button
-            onClick={handleDownloadPDF}
-            className="px-4 py-2 text-white bg-blue-600 rounded transition-colors hover:bg-blue-700"
-          >
-            Descargar PDF
-          </button>
+          <div className="flex gap-4 justify-end">
+            <button
+              onClick={savePDFToDisk}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md border border-transparent shadow-sm transition-colors duration-200 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              title="Descargar boletín en PDF"
+            >
+              <Download className="mr-2 w-5 h-5" />
+              Descargar PDF
+            </button>
+            <button
+              onClick={() => setIsEmailModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md border border-transparent shadow-sm transition-colors duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              title="Enviar boletín por correo electrónico"
+            >
+              <Mail className="mr-2 w-5 h-5" />
+              Enviar por Email
+            </button>
+          </div>
         )}
       </div>
 
@@ -1929,6 +2743,19 @@ export function GradesInput() {
             proceedWithStudentChange(pendingStudentChange);
           }
         }}
+      />
+
+      {/* Añadir el modal de correo electrónico */}
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        courses={courses}
+        selectedStudent={selectedStudent}
+        onSend={handleSendEmail}
+        handleDownloadPDF={handleDownloadPDF}
+        students={students}
+        grades={grades}
+        addToast={addToast}
       />
     </div>
   );

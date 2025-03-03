@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { CSSProperties } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { Music2Icon, LogOut } from 'lucide-react';
 import { Login } from './components/Login';
@@ -11,6 +11,11 @@ import { Settings } from './components/Settings';
 import { Teachers } from './components/Teachers';
 import { TeacherSubjects } from './components/TeacherSubjects';
 import { GradesInput } from './components/grades/GradesInput';
+
+// Definir el tipo para el estilo de WebkitAppRegion
+const dragStyle: CSSProperties = {
+  WebkitAppRegion: 'drag'
+} as CSSProperties;
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
@@ -24,33 +29,41 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm">
-          <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex">
-                <div className="flex flex-shrink-0 items-center">
-                  <Music2Icon className="w-8 h-8 text-indigo-600" />
-                  <span className="ml-2 text-xl font-semibold text-gray-900">
-                    Escuela de Música
-                  </span>
+        {isAuthenticated && (
+          <nav className="fixed top-0 left-0 right-0 z-50">
+            {/* Área para arrastrar la ventana (titlebar) */}
+            <div className="h-7" style={dragStyle} />
+            
+            {/* Contenido del navbar */}
+            <div className="bg-white/80 backdrop-blur-md border-b border-gray-200">
+              <div className="px-4">
+                <div className="flex justify-between h-12">
+                  <div className="flex items-center -ml-3">
+                    {/* Ajustado el padding-left para los botones de control */}
+                    <div className="flex flex-shrink-0 items-center pl-20">
+                      <Music2Icon className="w-6 h-6 text-indigo-600" />
+                      <span className="ml-2 text-lg font-semibold text-gray-900">
+                        Escuela de Música
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => logout()}
+                      className="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100"
+                    >
+                      <LogOut className="mr-1.5 w-4 h-4" />
+                      <span>Cerrar Sesión</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-              {isAuthenticated && (
-                <div className="flex items-center">
-                  <button
-                    onClick={() => logout()}
-                    className="flex items-center text-gray-600 hover:text-gray-900"
-                  >
-                    <LogOut className="mr-1 w-5 h-5" />
-                    <span>Cerrar Sesión</span>
-                  </button>
-                </div>
-              )}
             </div>
-          </div>
-        </nav>
+          </nav>
+        )}
 
-        <main className="py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        {/* Ajustar el contenido principal para el navbar */}
+        <main className={`${isAuthenticated ? 'pt-20' : ''} p-4`}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

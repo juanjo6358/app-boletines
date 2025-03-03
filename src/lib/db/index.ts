@@ -18,7 +18,22 @@ import {
   User,
   Permission
 } from '../../types';
+import { OAuthCredentials, EmailConfig, EmailTemplate } from '../../types/email';
 import { createSchema } from './schema';
+import CryptoJS from 'crypto-js';
+
+// Clave secreta para encriptación
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'tu_clave_secreta_muy_larga_y_compleja';
+
+// Funciones de encriptación
+const encryptPassword = (password: string): string => {
+  return CryptoJS.AES.encrypt(password, ENCRYPTION_KEY).toString();
+};
+
+const decryptPassword = (encryptedPassword: string): string => {
+  const bytes = CryptoJS.AES.decrypt(encryptedPassword, ENCRYPTION_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
 
 // Definir los tipos localmente
 interface GradeData {
@@ -1857,5 +1872,304 @@ export async function importStudents(students: any[]): Promise<Student[]> {
   } catch (error) {
     console.error('Error importing students:', error);
     throw error;
+  }
+}
+
+// Email Configs con soporte para OAuth
+export async function getEmailConfigs(): Promise<EmailConfig[]> {
+  try {
+    const result = await db.execute('SELECT * FROM email_configs ORDER BY is_default DESC');
+    
+    return result.rows.map(row => ({
+      id: row.id as string,
+      email: row.email as string,
+      password: row.password ? decryptPassword(row.password as string) : undefined,
+      isDefault: Boolean(row.is_default),
+      authType: row.auth_type as 'password' | 'oauth',
+      oauthCredentials: row.oauth_credentials 
+        ? JSON.parse(decryptPassword(row.oauth_credentials as string))
+        : undefined,
+      templateId: row.template_id as string | undefined
+    }));
+  } catch (error) {
+    console.error('Error getting email configs:', error);
+    throw error;
+  }
+}
+
+export async function saveEmailConfig(config: {
+  email: string;
+  password?: string;
+  isDefault: boolean;
+  authType: 'password' | 'oauth';
+  oauthCredentials?: OAuthCredentials;
+}) {
+  const id = crypto.randomUUID();
+  const encryptedPassword = config.password ? encryptPassword(config.password) : null;
+  const encryptedOAuthCredentials = config.oauthCredentials 
+    ? encryptPassword(JSON.stringify(config.oauthCredentials))
+    : null;
+  
+  const { rows } = await db.execute({
+    sql: `
+      INSERT INTO email_configs (
+        id, 
+        email, 
+        password, 
+        is_default, 
+        auth_type, 
+        oauth_credentials
+      ) 
+      VALUES (?, ?, ?, ?, ?, ?) 
+      RETURNING *
+    `,
+    args: [
+      id,
+      config.email,
+      encryptedPassword,
+      config.isDefault ? 1 : 0,
+      config.authType,
+      encryptedOAuthCredentials
+    ]
+  });
+  
+  return {
+    id: String(rows[0].id),
+    email: String(rows[0].email),
+    password: config.password,
+    isDefault: Boolean(rows[0].is_default),
+    authType: config.authType,
+    oauthCredentials: config.oauthCredentials
+  };
+}
+
+export async function updateEmailConfig(
+  id: string,
+  config: {
+    email?: string;
+    password?: string;
+    isDefault?: boolean;
+    oauthCredentials?: OAuthCredentials;
+    templateId?: string;
+  }
+): Promise<void> {
+  try {
+    const updates: string[] = [];
+    const args: any[] = [];
+
+    if (config.email !== undefined) {
+      updates.push('email = ?');
+      args.push(config.email);
+    }
+    if (config.password !== undefined) {
+      updates.push('password = ?');
+      args.push(encryptPassword(config.password));
+    }
+    if (config.isDefault !== undefined) {
+      updates.push('is_default = ?');
+      args.push(config.isDefault ? 1 : 0);
+    }
+    if (config.oauthCredentials !== undefined) {
+      updates.push('oauth_credentials = ?');
+      args.push(encryptPassword(JSON.stringify(config.oauthCredentials)));
+    }
+    if (config.templateId !== undefined) {
+      updates.push('template_id = ?');
+      args.push(config.templateId || null);
+    }
+
+    if (updates.length === 0) return;
+
+    args.push(id);
+
+    // Si esta cuenta será la predeterminada, actualizar las demás
+    if (config.isDefault) {
+      await db.execute(`UPDATE email_configs SET is_default = 0 WHERE id <> '${id}'`);
+    }
+
+    await db.execute({
+      sql: `UPDATE email_configs SET ${updates.join(', ')} WHERE id = ?`,
+      args
+    });
+  } catch (error) {
+    console.error('Error updating email config:', error);
+    throw error;
+  }
+}
+
+export async function deleteEmailConfig(id: string) {
+  await db.execute({
+    sql: 'DELETE FROM email_configs WHERE id = ?',
+    args: [id]
+  });
+}
+
+// Email Templates
+export async function getEmailTemplates(): Promise<EmailTemplate[]> {
+  const { rows } = await db.execute(
+    'SELECT * FROM email_templates ORDER BY is_default DESC'
+  );
+  return rows.map(row => ({
+    id: String(row.id),
+    name: String(row.name),
+    subject: String(row.subject),
+    body: String(row.body),
+    isDefault: Boolean(row.is_default)
+  }));
+}
+
+export async function saveEmailTemplate(template: Omit<EmailTemplate, 'id'>): Promise<EmailTemplate> {
+  const id = crypto.randomUUID();
+  const { rows } = await db.execute({
+    sql: 'INSERT INTO email_templates (id, name, subject, body, is_default) VALUES (?, ?, ?, ?, ?) RETURNING *',
+    args: [id, template.name, template.subject, template.body, template.isDefault ? 1 : 0]
+  });
+  return {
+    id: String(rows[0].id),
+    name: String(rows[0].name),
+    subject: String(rows[0].subject),
+    body: String(rows[0].body),
+    isDefault: Boolean(rows[0].is_default)
+  };
+}
+
+export async function updateEmailTemplate(id: string, template: { name?: string; subject?: string; body?: string; isDefault?: boolean }) {
+  const updates = [];
+  const args = [];
+  
+  if (template.name !== undefined) {
+    updates.push('name = ?');
+    args.push(template.name);
+  }
+  if (template.subject !== undefined) {
+    updates.push('subject = ?');
+    args.push(template.subject);
+  }
+  if (template.body !== undefined) {
+    updates.push('body = ?');
+    args.push(template.body);
+  }
+  if (template.isDefault !== undefined) {
+    updates.push('is_default = ?');
+    args.push(template.isDefault ? 1 : 0);
+  }
+
+  if (updates.length === 0) return;
+
+  args.push(id);
+
+  await db.execute({
+    sql: `UPDATE email_templates SET ${updates.join(', ')} WHERE id = ?`,
+    args
+  });
+
+  if (template.isDefault) {
+    // Si esta plantilla se establece como predeterminada, actualizar las demás
+    await db.execute({
+      sql: 'UPDATE email_templates SET is_default = 0 WHERE id != ?',
+      args: [id]
+    });
+  }
+}
+
+export async function deleteEmailTemplate(id: string) {
+  try {
+    // Primero, eliminar las referencias en email_configs
+    await db.execute({
+      sql: 'UPDATE email_configs SET template_id = NULL WHERE template_id = ?',
+      args: [id]
+    });
+
+    // Luego, eliminar la plantilla
+    await db.execute({
+      sql: 'DELETE FROM email_templates WHERE id = ?',
+      args: [id]
+    });
+  } catch (error) {
+    console.error('Error al eliminar la plantilla:', error);
+    throw error;
+  }
+}
+
+export async function getOAuthConfig() {
+  const result = await db.execute('SELECT * FROM oauth_config WHERE is_active = true LIMIT 1');
+  
+  if (result.rows.length === 0) return null;
+  
+  const row = result.rows[0];
+  return {
+    id: row.id as string,
+    clientId: row.client_id as string,
+    clientSecret: decryptPassword(row.client_secret as string),
+    redirectUri: row.redirect_uri as string,
+    isActive: Boolean(row.is_active)
+  };
+}
+
+export async function saveOAuthConfig(config: {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}) {
+  const id = crypto.randomUUID();
+  const encryptedSecret = encryptPassword(config.clientSecret);
+
+  // Desactivar cualquier configuración activa existente
+  await db.execute('UPDATE oauth_config SET is_active = false');
+
+  // Insertar la nueva configuración
+  await db.execute({
+    sql: `
+      INSERT INTO oauth_config (id, client_id, client_secret, redirect_uri, is_active)
+      VALUES (?, ?, ?, ?, true)
+    `,
+    args: [id, config.clientId, encryptedSecret, config.redirectUri]
+  });
+
+  return {
+    id,
+    ...config,
+    isActive: true
+  };
+}
+
+export async function updateOAuthConfig(
+  id: string,
+  config: {
+    clientId?: string;
+    clientSecret?: string;
+    redirectUri?: string;
+    isActive?: boolean;
+  }
+) {
+  const updates: string[] = [];
+  const args: any[] = [];
+
+  if (config.clientId !== undefined) {
+    updates.push('client_id = ?');
+    args.push(config.clientId);
+  }
+  if (config.clientSecret !== undefined) {
+    updates.push('client_secret = ?');
+    args.push(encryptPassword(config.clientSecret));
+  }
+  if (config.redirectUri !== undefined) {
+    updates.push('redirect_uri = ?');
+    args.push(config.redirectUri);
+  }
+  if (config.isActive !== undefined) {
+    if (config.isActive) {
+      await db.execute('UPDATE oauth_config SET is_active = false');
+    }
+    updates.push('is_active = ?');
+    args.push(config.isActive);
+  }
+
+  if (updates.length > 0) {
+    args.push(id);
+    await db.execute({
+      sql: `UPDATE oauth_config SET ${updates.join(', ')} WHERE id = ?`,
+      args
+    });
   }
 } 

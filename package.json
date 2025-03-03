@@ -1,13 +1,18 @@
 {
-  "name": "music-school-report-cards",
+  "name": "boletines-notas",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Aplicación de gestión de boletines de notas",
+  "main": "main.js",
   "scripts": {
-    "dev": "vite",
+    "start": "vite build && electron .",
+    "dev": "vite dev --port 5175 & VITE_DEV_SERVER_URL=http://localhost:5175 electron .",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node --loader ts-node/esm server/server.ts",
+    "pack": "electron-builder --dir",
+    "dist": "vite build && electron-builder"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -25,23 +30,40 @@
     "@tiptap/pm": "^2.11.5",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.7",
+    "electron-squirrel-startup": "^1.0.0",
+    "express": "^4.21.2",
+    "googleapis": "^146.0.0",
     "jspdf": "^3.0.0",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.344.0",
+    "nodemailer": "^6.9.9",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3",
+    "react-toastify": "^11.0.5",
+    "ts-node": "^10.9.2",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@electron/fuses": "^1.7.0",
     "@eslint/js": "^9.9.1",
+    "@types/cors": "^2.8.17",
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^5.0.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/react-pdf": "^7.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
+    "electron": "^28.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
@@ -51,5 +73,30 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
     "vite": "^5.4.2"
+  },
+  "build": {
+    "appId": "com.boletines.app",
+    "productName": "Boletines de Notas",
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.education",
+      "target": ["dmg", "zip"]
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    }
   }
 }

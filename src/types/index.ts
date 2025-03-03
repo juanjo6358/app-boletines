@@ -34,6 +34,10 @@ export interface Course {
   templateId?: string;
 }
 
+export interface CourseWithLevel extends Course {
+  levelName: string;
+}
+
 export interface AcademicYear {
   id: string;
   name: string;    // Ejemplo: "2023-2024"
@@ -183,4 +187,21 @@ export interface CenterConfig {
   name: string;
   logo?: string;
   directorName?: string;   // Nueva propiedad
-} 
+}
+
+export interface OAuthCredentials {
+  accessToken: string;
+  refreshToken: string;
+  expiryDate: number;
+}
+
+export interface EmailConfig {
+  id: string;
+  email: string;
+  password?: string;
+  isDefault: boolean;
+  authType: 'password' | 'oauth';
+  oauthCredentials?: OAuthCredentials;
+}
+
+export * from './email'; 

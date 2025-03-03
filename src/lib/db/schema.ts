@@ -51,6 +51,65 @@ export async function createSchema(db: any) {
         console.log('Columna permissions añadida a la tabla users');
       }
     }
+
+    // Crear tabla oauth_config si no existe
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS oauth_config (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        client_secret TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT false,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Crear tabla email_configs si no existe
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS email_configs (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT,
+        is_default BOOLEAN DEFAULT false,
+        auth_type TEXT CHECK (auth_type IN ('password', 'oauth')) NOT NULL,
+        oauth_credentials TEXT,
+        template_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Crear tabla email_templates si no existe
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        is_default BOOLEAN DEFAULT false,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Verificar si la columna name existe en email_templates
+    const columnsResult = await db.execute(`
+      PRAGMA table_info(email_templates);
+    `);
+    
+    const hasNameColumn = columnsResult.rows.some(
+      (row: any) => row.name === 'name'
+    );
+
+    if (!hasNameColumn) {
+      // Añadir la columna name si no existe
+      await db.execute(`
+        ALTER TABLE email_templates ADD COLUMN name TEXT NOT NULL DEFAULT 'Plantilla sin nombre';
+      `);
+      console.log('Columna name añadida a la tabla email_templates');
+    }
+
   } catch (error) {
     console.error('Error en createSchema:', error);
     throw error;

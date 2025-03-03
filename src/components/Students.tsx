@@ -135,7 +135,7 @@ export function Students() {
 
   return (
     <div className="py-6">
-      <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <div className="px-4">
         <div className="mb-6">
           <BackButton />
         </div>
@@ -212,9 +212,14 @@ export function Students() {
                   <option value="">Todos los cursos</option>
                   {courses
                     .filter(course => !selectedLevel || course.levelId === selectedLevel)
-                    .map(course => (
-                      <option key={course.id} value={course.id}>{course.name}</option>
-                    ))
+                    .map(course => {
+                      const levelName = levels.find(l => l.id === course.levelId)?.name;
+                      return (
+                        <option key={course.id} value={course.id}>
+                          {course.name} - {levelName}
+                        </option>
+                      );
+                    })
                   }
                 </select>
               </div>
@@ -276,6 +281,9 @@ export function Students() {
                           Apellidos
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Email
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                           Curso
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
@@ -314,6 +322,9 @@ export function Students() {
                           </td>
                           <td className="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">
                             {student.lastName}
+                          </td>
+                          <td className="px-3 py-4 text-sm text-gray-500">
+                            {student.email || '-'}
                           </td>
                           <td className="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">
                             {student.courseName}

@@ -80,7 +80,7 @@ export function TeacherSubjects() {
 
   return (
     <div className="py-6">
-      <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <div className="px-4">
         <div className="mb-6">
           <BackButton />
         </div>

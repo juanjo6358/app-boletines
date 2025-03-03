@@ -888,7 +888,7 @@ export function ReportCardDesigner() {
   };
 
   return (
-    <div className="relative p-6 pb-20">
+    <div className="relative p-4 pb-20">
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="loading-spinner"></div>
